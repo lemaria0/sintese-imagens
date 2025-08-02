@@ -9,22 +9,31 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 
-# física
+# posição do chão
 ground_y = -2.5
-size_cube = 2
-pos_y = ground_y + size_cube / 2
-vel_y = 0.0
-acc_y = -9.8
-rotation_speed = [0.0, 0.0, 0.0]
-rotation_angle = [0.0, 0.0, 0.0]
-bouncing = False
-first_launch = True
-result = False
 
-# tempo
+# tamanho da aresta do dado
+size_dice = 2
+
+# posição vertical inicial do dado (encostado no chão)
+pos_y = ground_y + size_dice / 2
+
+# movimentação
+vel_y = 0.0 # velocidade vertical inicial do dado
+acc_y = -9.8 # gravidade
+rotation_speed = [0.0, 0.0, 0.0] # velocidade de rotação
+rotation_angle = [0.0, 0.0, 0.0] # ângulo de rotação
+
+# estado
+bouncing = False # no ar? 
+first_launch = True # primeira vez?
+result = False # mostrar resultado?
+
+# tempo da última atualização de quadro
 last_time = time.time()
 
 
+# classe Ground
 class Ground:
     def __init__(self, y):
         self.y = y
@@ -39,10 +48,12 @@ class Ground:
         glEnd()
 
 
-class Cube:
+# classe Dice
+class Dice:
     def __init__(self, base):
         self.base = base / 2.0
 
+    # desenha um ponto com base na posição recebida
     def draw_dot(self, x, y, radius=0.1):
         glBegin(GL_TRIANGLE_FAN)
         glColor3f(0, 0, 0)
@@ -52,6 +63,7 @@ class Cube:
             glVertex2f(x + radius * cos(rad), y + radius * sin(rad))
         glEnd()
 
+    # para cada face, desenha seus pontos
     def draw_dice_face(self, number):
         positions = {
             1: [(0, 0)],
@@ -80,6 +92,7 @@ class Cube:
         ]
 
         glColor3f(0.95, 0.95, 0.95)
+        # desenha as faces do dado
         glBegin(GL_QUADS)
         for face in [
             [(-b, -b, b), (b, -b, b), (b, -b, -b), (-b, -b, -b)],
@@ -98,31 +111,36 @@ class Cube:
             glTranslatef(*trans)
             if rot[0] != 0:
                 glRotatef(*rot)
+            # desenha os pontos das faces
             self.draw_dice_face(num)
             glPopMatrix()
 
 
-myCube = Cube(size_cube)
-ground = Ground(ground_y)
+# instanciando objetos
+myDice = Dice(size_dice)
+myGround = Ground(ground_y)
 
+
+# funcionamento das teclas
 def keyboard(key, _x, _y):
     global vel_y, rotation_speed, bouncing, result, first_launch
 
     if key == b'\x1b':
         exit(0)
-    elif key == b' ' and not bouncing:
-        vel_y = 6.0
-        bouncing = True
-        result = False
-        first_launch = False
-        rotation_speed = [
-            random.uniform(300, 600),
-            random.uniform(300, 600),
-            random.uniform(300, 600)
+    elif key == b' ' and not bouncing: # quando tecla espaço e não está no ar
+        vel_y = 6.0 # velocidade para cima
+        bouncing = True # está no ar
+        result = False # não mostra "Resultado:"
+        first_launch = False # depois que aperta espaço pela primeira vez, não é mais a primeira jogada
+        rotation_speed = [ # a velocidade de rotação para cada eixo é definida aleatoriamente e apenas uma vez
+            random.uniform(300, 600), # eixo x
+            random.uniform(300, 600), # eixo y
+            random.uniform(300, 600) # eixo z
         ]
-    glutPostRedisplay()
+    glutPostRedisplay() # redesenha
 
 
+# configuração inicial
 def init():
     glClearColor(0.1, 0.1, 0.25, 1)
     glEnable(GL_DEPTH_TEST)
@@ -132,60 +150,66 @@ def init():
     glMatrixMode(GL_MODELVIEW)
 
 
+# função de display
 def display():
-    global pos_y, vel_y, rotation_angle, last_time, bouncing, result, first_launch, size_cube
+    global pos_y, vel_y, rotation_angle, last_time, bouncing, result, first_launch, size_dice
 
+    # usaremos o tempo para calcular quanto o dado deve subir ou descer e quanto ele deve girar
     now = time.time()
     dt = now - last_time
     last_time = now
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glLoadIdentity()
-    gluLookAt(0, 0, 10, 0, 0, 0, 0, 1, 0)
+    gluLookAt(0, 0, 10, 0, 0, 0, 0, 1, 0) # posição da câmera
 
-    ground.draw()
+    myGround.draw() # desenha chão 
 
-    glPushMatrix()
-    glTranslatef(0, pos_y, 0)
-
-    if bouncing:
-        vel_y += acc_y * dt
-        pos_y += vel_y * dt
+    if bouncing: # se o cubo está no ar
+        vel_y += acc_y * dt # atualiza a velocidade com base na gravidade // aceleração afeta a velocidade (v = v0 + a*t)
+        pos_y += vel_y * dt # atualiza a posição com base nessa velocidade // velocidade afeta a posição (s = s0 + v*t)
         for i in range(3):
+            # para cada eixo de rotação, vamos pegar a velocidade naquele eixo, multiplicar pelo tempo decorrido e somar esse valor ao ângulo de rotação atual
             rotation_angle[i] += rotation_speed[i] * dt
 
-        if pos_y <= ground_y + size_cube / 2:
-            pos_y = ground_y + size_cube / 2
-            vel_y = -vel_y * 0.4
+        if pos_y <= ground_y + size_dice / 2: # se estiver no chão
+            pos_y = ground_y + size_dice / 2
+            vel_y = -vel_y * 0.4 # quica
             for i in range(3):
-                rotation_speed[i] *= 0.5
-            if abs(vel_y) < 0.1 and max(rotation_speed) < 1:
-                bouncing = False
+                rotation_speed[i] *= 0.5 # velocidade de cada eixo diminuida pela metade
+            if abs(vel_y) < 0.1 and max(rotation_speed) < 1: # se está quase parado
+                bouncing = False # não está mais no ar
                 for i in range(3):
-                    rotation_angle[i] = round(rotation_angle[i] / 90.0) * 90.0
+                    rotation_angle[i] = round(rotation_angle[i] / 90.0) * 90.0 # arredonda os ângulos para múltiplos de 90
                 result = True
-                
-    glColor3f(1.0, 1.0, 0.0)
-    if first_launch:
-        glRasterPos3f(-3.6, 4.5, 0)
-        for c in 'Aperte a tecla espaço para lançar o cubo:':
-            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(c))
-    if result:
-        glRasterPos3f(-1, 4.5, 0)
-        for c in 'Resultado:':
-            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(c))
 
+    glPushMatrix()
+
+    glTranslatef(0, pos_y, 0) # vamos desenhar o dado na tela de acordo com sua posição atual
+
+    # aplica rotações para cada eixo
     glRotatef(rotation_angle[0], 1, 0, 0)
     glRotatef(rotation_angle[1], 0, 1, 0)
     glRotatef(rotation_angle[2], 0, 0, 1)
 
-    myCube.draw()
-    glPopMatrix()
+    myDice.draw() # desenha dado
+    glPopMatrix() # isola a transformação atual da seguinte
+
+    glColor3f(1.0, 1.0, 0.0)
+    if first_launch: # se for a primeira jogada
+        glRasterPos3f(-3.6, 4.5, 0)
+        for c in 'Aperte a tecla espaço para lançar o dado:':
+            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(c))
+    if result: # se deve mostrar resultado
+        glRasterPos3f(-1, 4.5, 0)
+        for c in 'Resultado:':
+            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(c))
 
     glutSwapBuffers()
     glutPostRedisplay()
 
 
+# função main
 def main():
     glutInit()
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
